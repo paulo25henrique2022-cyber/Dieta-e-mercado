@@ -27,7 +27,7 @@ function padrao() {
     orc: { saldo: 0, hist: [] }, novo: true,
   };
 }
-function carregar() { try { S = JSON.parse(localStorage.getItem(CHAVE)); } catch (e) { S = null; } if (!S) S = padrao(); if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); }
+function carregar() { try { S = JSON.parse(localStorage.getItem(CHAVE)); } catch (e) { S = null; } if (!S) S = padrao(); if (!S.alimV106) { const t = new Set(S.alimentos.map(x => x.n)); ALIMENTOS0.filter(x => ALIM_NOVOS_106.includes(x.n) && !t.has(x.n)).forEach(x => S.alimentos.push({ ...x })); S.alimV106 = 1; } if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); }
 function salvar() { try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch (e) { toast('Não foi possível salvar. Faça um backup.'); } }
 function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2300); }
 
@@ -239,8 +239,18 @@ V.dieta = () => {
    <div class="meta big" style="left:7%;top:20.6%;width:86%;height:26%">
     ${it('Calorias', c.kcal, m.kcal, '')}${it('Gordura', c.gord, m.gord, 'g')}${it('Proteína', c.ptn, m.ptn, 'g')}${it('Fibras', c.fibra, m.fibra, 'g')}${it('Carbo', c.carb, m.carb, 'g')}<div class="m"><span>Água</span> <b>${nf(m.agua, 1)} L</b><div class="sub" style="font-size:10px">${OBJ[S.perfil.objetivo]}</div></div>
    </div>
-   ${hot('#/ingredientes', 3.5, 63.5, 93, 14.3, 'Ingredientes')}${hot('#/pratos', 3.5, 79.8, 93, 15.2, 'Pratos prontos')}</div>`;
+   ${hot('#/ingredientes', 3.5, 63.5, 93, 14.3, 'Ingredientes')}${hot('#/pratos', 3.5, 79.8, 93, 15.2, 'Pratos prontos')}</div>${planoDia()}`;
 };
+function planoDia() {
+  const L = S.consumo.ids.map(id => S.receitas.find(r => r.id === id)).filter(Boolean);
+  if (!S.consumo.plano || !L.length) return '';
+  const A = horariosAuto(idxSeg()), E = S.consumo.horas || {}; const g = REF.map(ref => ({ ref, h: E[ref] || A[ref].h, ed: !!E[ref], por: A[ref].por, R: L.filter(r => r.refeicao === ref) })).filter(x => x.R.length).sort((a, b) => min(a.h) - min(b.h));
+  const T = totais(L.flatMap(r => r.ingredientes));
+  return `<div class="pag v" id="plano" style="padding-top:8px"><h1>📋 Refeições do dia</h1>
+   <div class="cx sub">Total planejado: <b>${nf(T.kcal)} kcal</b> · P ${nf(T.proteina_g)} g · C ${nf(T.carbo_g)} g · G ${nf(T.gordura_g)} g · F ${nf(T.fibra_g)} g</div>
+   ${g.map(x => `<div class="cx"><div class="ref" style="align-items:center"><b>${x.ref}</b><span>🕒 <input type="time" value="${x.h}" data-chg="horaRef" data-arg="${x.ref}" style="width:105px;padding:4px">${x.ed ? `<button class="ed" data-act="horaAuto" data-arg="${x.ref}" title="Voltar ao automático">↺</button>` : ''}</span></div><div class="sub" style="font-size:11px">${x.ed ? '✏️ Horário editado por você' : '⚙️ ' + x.por}</div>${x.R.map(r => { const t = totais(r.ingredientes); return `<div style="margin-top:8px"><div class="ref"><span><b>${esc(r.nome)}</b></span><span>${nf(t.kcal)} kcal</span></div><div class="sub">${r.ingredientes.map(i => esc(i.alimento) + ' ' + nf(i.g) + ' g').join(' · ')}</div><div class="sub">P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</div></div>`; }).join('')}</div>`).join('')}
+   <button class="btn sec" onclick="location.hash='#/pratos'">✏️ Alterar refeições</button></div>`;
+}
 
 /* ingredientes + montar prato */
 const CATS = ['Carnes e ovos', 'Laticínios', 'Grãos e cereais', 'Leguminosas', 'Legumes e verduras', 'Frutas', 'Gorduras e oleaginosas', 'Temperos e outros', 'Suplementos'];
@@ -295,12 +305,38 @@ V.pratos = () => {
   const c = consumoHoje(), m = calc(idxSeg()).m;
   const L = S.receitas.filter(r => (!catP || r.refeicao === catP) && (!buscaP || r.nome.toLowerCase().includes(buscaP.toLowerCase())));
   return `<div class="pag v">${volta('#/dieta')}<h1>Pratos prontos</h1>
-   <div class="cx sub">Hoje: <b>${nf(c.kcal)}/${nf(m.kcal)} kcal</b> · P ${nf(c.ptn)}/${nf(m.ptn)} g · C ${nf(c.carb)}/${nf(m.carb)} g · G ${nf(c.gord)}/${nf(m.gord)} g. Toque no prato que comeu; toque de novo para desmarcar.</div>
+   <div class="cx sub">Hoje: <b>${nf(c.kcal)}/${nf(m.kcal)} kcal</b> · P ${nf(c.ptn)}/${nf(m.ptn)} g · C ${nf(c.carb)}/${nf(m.carb)} g · G ${nf(c.gord)}/${nf(m.gord)} g. Toque nos pratos que vai comer hoje (toque de novo para desmarcar) e depois gere as refeições do dia.</div>
+   ${S.consumo.ids.length ? `<button class="btn g" data-act="gerarDia">📋 Gerar refeições do dia (${S.consumo.ids.length})</button>` : ''}
    <input placeholder="🔍 Buscar prato" value="${esc(buscaP)}" data-inp="buscaP" id="bus" style="margin-bottom:8px">
    <div class="chips"><button class="chip ${!catP ? 'on' : ''}" data-act="catP" data-arg="">Todos</button>${REF.map(r => `<button class="chip ${catP === r ? 'on' : ''}" data-act="catP" data-arg="${r}">${r}</button>`).join('')}</div>
    ${L.map(r => { const t = totais(r.ingredientes), on = S.consumo.ids.includes(r.id); return `<div class="it ${on ? 'on' : ''}" data-act="comer" data-arg="${r.id}"><div class="n"><b>${on ? '✓ ' : ''}${esc(r.nome)}</b><small>${nf(t.kcal)} kcal · P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</small></div><button class="ed" data-act="recEdit" data-arg="${r.id}" aria-label="Editar">✏️</button></div>`; }).join('')}</div>`;
 };
 ACT.buscaP = (_, el) => { buscaP = el.value; const pos = el.selectionStart; rerender(); const n = $('#bus'); n.focus(); n.setSelectionRange(pos, pos); };
+ACT.horaRef = (ref, el) => { consumoHoje(); (S.consumo.horas ||= {})[ref] = el.value; if (!el.value) delete S.consumo.horas[ref]; salvar(); rerender(); setTimeout(() => $('#plano')?.scrollIntoView(), 50); };
+ACT.horaAuto = ref => { delete (S.consumo.horas || {})[ref]; salvar(); rerender(); setTimeout(() => $('#plano')?.scrollIntoView(), 50); };
+/* Horários automáticos (ISSN Position Stands: Nutrient Timing 2017 e Protein and Exercise 2017; Snijders et al. 2019):
+   café até ~30 min após acordar; refeição 1–3 h antes do treino (usamos 1h30); refeição com proteína até ~2 h após (usamos 1 h);
+   intervalos de 3–4 h entre refeições com proteína; ceia proteica 30–90 min antes de dormir. */
+function horariosAuto(i) {
+  const W = min(S.perfil.acordar || '07:00'); let D = min(S.perfil.dormir || '23:00'); if (D <= W) D += 1440;
+  const H = { 'Café da manhã': [W + 30, '30 min depois de acordar'], 'Almoço': [Math.max(750, W + 270), 'intervalo de 3–4 h entre refeições'],
+    'Jantar': [Math.max(1080, D - 180), '3 h antes de dormir'], 'Ceia': [D - 60, '1 h antes de dormir (proteína lenta ajuda a recuperação noturna)'] };
+  H['Lanche / pré-treino'] = [Math.round((H['Almoço'][0] + H['Jantar'][0]) / 2), 'entre o almoço e o jantar'];
+  const TN = { karate: 'do karatê', musculacao: 'da musculação', natacao: 'da natação', sabado: 'do treino de sábado' };
+  const T = treinosDia(i).filter(t => t.k !== 'yoga' && t.ini).map(t => ({ n: TN[t.k], s: min(t.ini), e: t.fim ? min(t.fim) : min(t.ini) + t.min })).sort((a, b) => a.s - b.s);
+  const usado = new Set();
+  for (const t of T) {
+    const pos = ['Almoço', 'Jantar', 'Ceia'].find(r => !usado.has(r) && H[r][0] > t.s);
+    if (pos) { H[pos] = [Math.min(t.e + 60, pos === 'Ceia' ? D - 30 : 1e9), `1 h depois ${t.n} (recuperação)`]; usado.add(pos); }
+    const ant = Object.keys(H).filter(r => H[r][0] < t.s).sort((a, b) => H[b][0] - H[a][0])[0];
+    const gap = ant ? t.s - H[ant][0] : 0, pre = t.n.replace(/^d[oa] /, '');
+    if (t.s < W + 150) { H['Café da manhã'] = [W + 30, `30 min depois de acordar · leve, pois é o pré-treino (${pre})`]; }
+    else if (ant && gap >= 60 && gap <= 180) H[ant] = [H[ant][0], H[ant][1] + ` · também serve de pré-treino (${pre})`];
+    else if (!usado.has('Lanche / pré-treino')) { H['Lanche / pré-treino'] = [t.s - 90, `1h30 antes ${t.n} (energia para o treino)`]; usado.add('Lanche / pré-treino'); }
+  }
+  const R = {}; for (const r in H) R[r] = { h: hm(H[r][0]), por: H[r][1] }; return R;
+}
+ACT.gerarDia = () => { S.consumo.plano = true; salvar(); location.hash = '#/dieta'; setTimeout(() => $('#plano')?.scrollIntoView({ behavior: 'smooth' }), 350); };
 ACT.catP = a => { catP = a; rerender(); };
 ACT.comer = (id, el, ev) => { if (ev.target.closest('.ed')) return; consumoHoje(); const L = S.consumo.ids, i = L.indexOf(id); i < 0 ? L.push(id) : L.splice(i, 1); salvar(); rerender(); };
 
