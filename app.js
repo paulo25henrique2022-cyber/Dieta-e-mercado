@@ -27,7 +27,7 @@ function padrao() {
     orc: { saldo: 0, hist: [] }, novo: true,
   };
 }
-function carregar() { try { S = JSON.parse(localStorage.getItem(CHAVE)); } catch (e) { S = null; } if (!S) S = padrao(); if (!S.alimV106) { const t = new Set(S.alimentos.map(x => x.n)); ALIMENTOS0.filter(x => ALIM_NOVOS_106.includes(x.n) && !t.has(x.n)).forEach(x => S.alimentos.push({ ...x })); S.alimV106 = 1; } if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); }
+function carregar() { try { S = JSON.parse(localStorage.getItem(CHAVE)); } catch (e) { S = null; } if (!S) S = padrao(); if (!S.alimV106) { const t = new Set(S.alimentos.map(x => x.n)); ALIMENTOS0.filter(x => ALIM_NOVOS_106.includes(x.n) && !t.has(x.n)).forEach(x => S.alimentos.push({ ...x })); S.alimV106 = 1; } if (!S.unV109) { S.alimentos.forEach(a => { if (UN[a.n] && !a.u) a.u = UN[a.n]; }); S.unV109 = 1; } if (S.agua == null) S.agua = 0; if (navigator.storage?.persist) navigator.storage.persist().catch(() => {}); }
 function salvar() { try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch (e) { toast('Não foi possível salvar. Faça um backup.'); } }
 function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2300); }
 
@@ -85,6 +85,14 @@ function refeicoes(i, m) {
   return N.map(([n, f], j) => ({ n, h: hm(ini + passo * j), kcal: m.kcal * f, ptn: m.ptn / 5, carb: m.carb * f, gord: m.gord * f }));
 }
 
+/* ---------- peso médio por unidade (g) — medidas caseiras aproximadas (TACO/UNICAMP; Pinheiro, Tabela para Avaliação de Consumo Alimentar em Medidas Caseiras) ---------- */
+const UN = { 'ovo': 50, 'clara de ovo': 33, 'pão francês': 50, 'pão de forma tradicional': 25, 'pão integral': 25, 'pão sírio': 60, 'tortilha/wrap integral': 40, 'biscoito de arroz': 9,
+  'banana': 80, 'banana-prata': 70, 'banana-nanica': 100, 'maçã': 130, 'pera': 130, 'laranja': 180, 'tangerina': 135, 'kiwi': 75, 'manga': 300, 'limão': 60, 'caqui': 110, 'figo': 50, 'ameixa': 40,
+  'goiaba': 170, 'maracujá': 90, 'morango': 12, 'tomate-cereja': 10, 'acerola': 6, 'uva': 6, 'tomate': 100, 'cebola': 100, 'cenoura': 100, 'batata': 130, 'batata-doce': 150, 'batata-doce roxa': 150,
+  'beterraba': 120, 'pepino': 150, 'pimentão': 130, 'berinjela': 250, 'abobrinha': 250, 'alho': 4, 'castanha-do-pará': 4, 'nozes': 5, 'mandioquinha': 90, 'inhame': 100 };
+const unQ = (n, g) => { const a = AL(n); if (!a || !a.u) return 0; return Math.round(g / a.u * 2) / 2; };
+const unTxt = (n, g) => { const q = unQ(n, g); return q ? ` <span class="un">(≈ ${nf(q, 1)} un.)</span>` : ''; };
+
 /* ---------- nutrientes de receitas ---------- */
 const AL = n => S.alimentos.find(a => a.n === n);
 function totais(ings) {
@@ -93,12 +101,13 @@ function totais(ings) {
   return t;
 }
 function consumoHoje() {
-  if (S.consumo.data !== hoje()) { S.consumo = { data: hoje(), ids: [] }; salvar(); }
+  if (S.consumo.data !== hoje()) { S.consumo = { data: hoje(), ids: [], comidos: [] }; salvar(); }
   const t = { kcal: 0, ptn: 0, carb: 0, gord: 0, fibra: 0 };
   for (const id of S.consumo.ids) { const r = S.receitas.find(x => x.id === id); if (!r) continue; const q = totais(r.ingredientes);
     t.kcal += q.kcal; t.ptn += q.proteina_g; t.carb += q.carbo_g; t.gord += q.gordura_g; t.fibra += q.fibra_g; }
   return t;
 }
+function comidoHoje() { consumoHoje(); const C = S.consumo.comidos || []; let k = 0; for (const id of C) { if (!S.consumo.ids.includes(id)) continue; const r = S.receitas.find(x => x.id === id); if (r) k += totais(r.ingredientes).kcal; } return k; }
 
 /* ---------- roteador ---------- */
 const V = {}, ACT = {};
@@ -131,7 +140,35 @@ V.inicio = () => `<div class="arte"><img src="img/inicial.jpg" alt="Menu">
   ${hotN('#/dieta', 5, 25.6, 43.8, 26.2, 'DIETA', '#2f6e14')}${hotN('#/receitas', 51.3, 25.6, 43.8, 26.2, 'RECEITAS', '#b8560f')}
   ${hotN('#/mercado', 5, 53.3, 43.8, 27.6, 'MERCADO', '#8f1a12')}${hotN('#/casal', 51.3, 53.3, 43.8, 27.6, 'CASAL', '#9a6a12')}
   <a class="casal-top" href="#/perfil" style="left:auto;right:58px;top:10px;padding:2px 10px 2px 2px">${S.perfil.foto ? `<img class="av" style="width:36px;height:36px" src="${S.perfil.foto}">` : '<span class="av" style="width:36px;height:36px;font-size:18px">👤</span>'}<span style="font-size:13px"><b>${esc(S.perfil.nome)}</b><br><span class="obj" style="font-size:10px">${OBJ[S.perfil.objetivo]}</span></span></a>
-  <a class="cfg" href="#/config" aria-label="Configurações">⚙️</a></div>`;
+  <a class="cfg" href="#/config" aria-label="Configurações">⚙️</a>${garrafa()}</div>`;
+function garrafa() {
+  const b = 'M40 6h20v10h-2v8c0 4 26 10 26 26v98c0 6-4 10-10 10H26c-6 0-10-4-10-10V50c0-16 26-22 26-26v-8h-2z';
+  const marcas = Array.from({ length: 9 }, (_, i) => `<line x1="18" x2="${i % 2 ? 25 : 29}" y1="${aguaY(i + 1)}" y2="${aguaY(i + 1)}"/>`).join('');
+  const bol = [[34, 0], [52, 1.3], [66, .6], [44, 2.1], [60, 2.8]].map(([x, d]) => `<circle class="bol" cx="${x}" cy="140" r="${1.6 + (x % 3) * .6}" style="animation-delay:${d}s"/>`).join('');
+  return `<div class="garrafa" id="garrafa" aria-label="Garrafa de água: toque para tirar 1 litro, arraste para encher ou esvaziar">
+   <svg viewBox="0 0 100 172"><defs><clipPath id="gcl"><path d="${b}"/></clipPath><linearGradient id="gag" x1="0" x2="1"><stop offset="0" stop-color="#1e88e5"/><stop offset=".5" stop-color="#4fc3f7"/><stop offset="1" stop-color="#1565c0"/></linearGradient></defs>
+    <path d="${b}" fill="rgba(255,255,255,.10)"/>
+    <g clip-path="url(#gcl)"><g id="gagua" style="transform:translateY(${aguaY(S.agua)}px)">
+     <path class="onda o2" d="M-100 4q12.5-7 25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0V200H-100z" fill="#0d47a1" opacity=".55"/>
+     <path class="onda" d="M-100 4q12.5-7 25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0t25 0V200H-100z" fill="url(#gag)" opacity=".9"/>
+     <g class="bols">${bol}</g></g></g>
+    <g stroke="rgba(255,255,255,.45)" stroke-width="1.2">${marcas}</g>
+    <path d="${b}" fill="none" stroke="rgba(220,240,255,.8)" stroke-width="2"/><path d="M24 56v86" stroke="rgba(255,255,255,.35)" stroke-width="3" stroke-linecap="round"/>
+    <rect x="38" y="0" width="24" height="9" rx="3" fill="#29b6f6"/></svg>
+   <div class="gtx"><b id="glit">${S.agua} L</b><small>toque: −1 L<br>arraste: ↕</small></div></div>`;
+}
+const aguaY = l => 158 - l * 12.6;
+function aguaSet(l) {
+  l = Math.max(0, Math.min(10, l)); if (l === S.agua) return; S.agua = l; salvar();
+  const g = $('#gagua'); if (g) g.style.transform = `translateY(${aguaY(l)}px)`; const t = $('#glit'); if (t) t.textContent = l + ' L';
+  if (navigator.vibrate) navigator.vibrate(12);
+}
+(() => { let y0 = null, l0 = 0, arrastou = false;
+  document.addEventListener('pointerdown', ev => { const g = ev.target.closest('#garrafa'); if (!g) return; y0 = ev.clientY; l0 = S.agua; arrastou = false; g.setPointerCapture?.(ev.pointerId); ev.preventDefault(); });
+  document.addEventListener('pointermove', ev => { if (y0 === null) return; const d = y0 - ev.clientY; if (Math.abs(d) > 8) arrastou = true; if (arrastou) { const h = $('#garrafa svg').getBoundingClientRect().height; aguaSet(l0 + Math.round(d / Math.max(16, h * 0.0733))); } });
+  const fim = () => { if (y0 === null) return; if (!arrastou) aguaSet(S.agua - 1); y0 = null; };
+  document.addEventListener('pointerup', fim); document.addEventListener('pointercancel', () => { y0 = null; });
+})();
 
 /* ---------- CASAL ---------- */
 const avatar = () => S.perfil.foto ? `<img class="av" src="${S.perfil.foto}" alt="">` : `<span class="av">👤</span>`;
@@ -236,8 +273,9 @@ V.dieta = () => {
   const m = calc(idxSeg()).m, c = consumoHoje();
   const it = (n, v, t, u, d = 0) => { const p = t ? v / t * 100 : 0; return `<div class="m"><span>${n}</span> <b>${nf(v, d)}/${nf(t, d)}${u}</b><div class="bar"><i class="${p > 105 ? 'over' : ''}" style="width:${Math.min(p, 100)}%"></i></div></div>`; };
   return `<div class="arte"><img src="img/dieta.jpg" alt="Dieta">${volta()}
-   <div class="meta big" style="left:7%;top:20.6%;width:86%;height:26%">
+   <div class="meta big" style="left:7%;top:20.2%;width:86%;height:27%">
     ${it('Calorias', c.kcal, m.kcal, '')}${it('Gordura', c.gord, m.gord, 'g')}${it('Proteína', c.ptn, m.ptn, 'g')}${it('Fibras', c.fibra, m.fibra, 'g')}${it('Carbo', c.carb, m.carb, 'g')}<div class="m"><span>Água</span> <b>${nf(m.agua, 1)} L</b><div class="sub" style="font-size:10px">${OBJ[S.perfil.objetivo]}</div></div>
+    ${(() => { const k = comidoHoje(), p = m.kcal ? k / m.kcal * 100 : 0; return `<div class="m comido"><span>✅ Consumido</span> <b>${nf(k)}/${nf(m.kcal)} kcal</b><div class="bar"><i class="${p > 105 ? 'over' : ''}" style="width:${Math.min(p, 100)}%"></i></div></div>`; })()}
    </div>
    ${hot('#/ingredientes', 3.5, 63.5, 93, 14.3, 'Ingredientes')}${hot('#/pratos', 3.5, 79.8, 93, 15.2, 'Pratos prontos')}</div>${planoDia()}`;
 };
@@ -248,7 +286,7 @@ function planoDia() {
   const T = totais(L.flatMap(r => r.ingredientes));
   return `<div class="pag v" id="plano" style="padding-top:8px"><h1>📋 Refeições do dia</h1>
    <div class="cx sub">Total planejado: <b>${nf(T.kcal)} kcal</b> · P ${nf(T.proteina_g)} g · C ${nf(T.carbo_g)} g · G ${nf(T.gordura_g)} g · F ${nf(T.fibra_g)} g</div>
-   ${g.map(x => `<div class="cx"><div class="ref" style="align-items:center"><b>${x.ref}</b><span>🕒 <input type="time" value="${x.h}" data-chg="horaRef" data-arg="${x.ref}" style="width:105px;padding:4px">${x.ed ? `<button class="ed" data-act="horaAuto" data-arg="${x.ref}" title="Voltar ao automático">↺</button>` : ''}</span></div><div class="sub" style="font-size:11px">${x.ed ? '✏️ Horário editado por você' : '⚙️ ' + x.por}</div>${x.R.map(r => { const t = totais(r.ingredientes); return `<div style="margin-top:8px"><div class="ref"><span><b>${esc(r.nome)}</b></span><span>${nf(t.kcal)} kcal</span></div><div class="sub">${r.ingredientes.map(i => esc(i.alimento) + ' ' + nf(i.g) + ' g').join(' · ')}</div><div class="sub">P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</div></div>`; }).join('')}</div>`).join('')}
+   ${g.map(x => `<div class="cx"><div class="ref" style="align-items:center"><b>${x.ref}</b><span>🕒 <input type="time" value="${x.h}" data-chg="horaRef" data-arg="${x.ref}" style="width:105px;padding:4px">${x.ed ? `<button class="ed" data-act="horaAuto" data-arg="${x.ref}" title="Voltar ao automático">↺</button>` : ''}</span></div><div class="sub" style="font-size:11px">${x.ed ? '✏️ Horário editado por você' : '⚙️ ' + x.por}</div>${x.R.map(r => { const t = totais(r.ingredientes), ok = (S.consumo.comidos || []).includes(r.id); return `<div class="pr ${ok ? 'comi' : ''}" style="margin-top:8px"><div class="ref" style="align-items:center"><span style="display:flex;gap:8px;align-items:center"><button class="chk ${ok ? 'on' : ''}" data-act="comido" data-arg="${r.id}" aria-label="Já comi">${ok ? '✓' : ''}</button><b>${esc(r.nome)}</b></span><span>${nf(t.kcal)} kcal</span></div><div class="sub">${r.ingredientes.map(i => esc(i.alimento) + ' ' + nf(i.g) + ' g' + unTxt(i.alimento, i.g)).join(' · ')}</div><div class="sub">P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</div></div>`; }).join('')}</div>`).join('')}
    <button class="btn sec" onclick="location.hash='#/pratos'">✏️ Alterar refeições</button></div>`;
 }
 
@@ -262,15 +300,16 @@ V.ingredientes = () => {
    <input placeholder="🔍 Buscar alimento" value="${esc(busca)}" data-inp="busca" id="bus" style="margin-bottom:8px">
    <div class="chips"><button class="chip ${!filtroCat ? 'on' : ''}" data-act="cat" data-arg="">Todos</button>${CATS.map(c => `<button class="chip ${filtroCat === c ? 'on' : ''}" data-act="cat" data-arg="${c}">${c}</button>`).join('')}</div>
    <button class="btn p g" data-act="alimEdit" data-arg="">+ Novo ingrediente</button>
-   <div id="lst">${L.map(a => `<div class="it" data-act="addPrato" data-arg="${esc(a.n)}"><div class="n"><b>${esc(a.n)}</b><small>100 g: ${nf(a.kcal)} kcal · P ${nf(a.proteina_g, 1)} · C ${nf(a.carbo_g, 1)} · G ${nf(a.gordura_g, 1)} · F ${nf(a.fibra_g, 1)}</small></div><button class="ed" data-act="alimEdit" data-arg="${esc(a.n)}" aria-label="Editar">✏️</button></div>`).join('')}</div>
+   <div id="lst">${L.map(a => `<div class="it" data-act="addPrato" data-arg="${esc(a.n)}"><div class="n"><b>${esc(a.n)}</b><small>${a.u ? `1 un. ≈ ${nf(a.u)} g · ` : ''}100 g: ${nf(a.kcal)} kcal · P ${nf(a.proteina_g, 1)} · C ${nf(a.carbo_g, 1)} · G ${nf(a.gordura_g, 1)} · F ${nf(a.fibra_g, 1)}</small></div><button class="ed" data-act="alimEdit" data-arg="${esc(a.n)}" aria-label="Editar">✏️</button></div>`).join('')}</div>
    <div style="height:${prato.length ? 160 : 0}px"></div>
-   ${prato.length ? `<div class="mont"><b>Meu prato</b> <span class="sub">(${prato.length} itens)</span><div style="max-height:90px;overflow-y:auto">${prato.map((p, i) => `<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><span style="flex:1;font-size:13px">${esc(p.n)}</span><input type="number" value="${p.g}" data-chg="pratoG" data-arg="${i}" style="width:70px;padding:5px">g<button class="ed" data-act="pratoDel" data-arg="${i}">✕</button></div>`).join('')}</div>
+   ${prato.length ? `<div class="mont"><b>Meu prato</b> <span class="sub">(${prato.length} itens)</span><div style="max-height:90px;overflow-y:auto">${prato.map((p, i) => `<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><span style="flex:1;font-size:13px">${esc(p.n)}</span>${AL(p.n)?.u ? `<input type="number" inputmode="decimal" step="0.5" min="0" value="${unQ(p.n, p.g)}" data-chg="pratoU" data-arg="${i}" style="width:54px;padding:5px">un` : ''}<input type="number" value="${p.g}" data-chg="pratoG" data-arg="${i}" style="width:66px;padding:5px">g<button class="ed" data-act="pratoDel" data-arg="${i}">✕</button></div>`).join('')}</div>
     <div style="font-size:13px;margin:4px 0"><b>${nf(t.kcal)} kcal</b> · P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</div>
     <div class="g2"><button class="btn sec" data-act="pratoLimpar" style="margin:0">Limpar</button><button class="btn g" data-act="pratoSalvar" style="margin:0">Salvar prato</button></div></div>` : ''}</div>`;
 };
 ACT.cat = a => { filtroCat = a; rerender(); };
 ACT.busca = (_, el) => { busca = el.value; const pos = el.selectionStart; rerender(); const n = $('#bus'); n.focus(); n.setSelectionRange(pos, pos); };
-ACT.addPrato = (n, el, ev) => { if (ev.target.closest('.ed')) return; prato.push({ n, g: 100 }); toast(`${n}: 100 g no prato (ajuste as gramas)`); rerender(); };
+ACT.addPrato = (n, el, ev) => { if (ev.target.closest('.ed')) return; const u = AL(n)?.u; prato.push({ n, g: u || 100 }); toast(u ? `${n}: 1 unidade (≈ ${u} g) no prato` : `${n}: 100 g no prato (ajuste as gramas)`); rerender(); };
+ACT.pratoU = (i, el) => { prato[i].g = Math.round((+el.value || 0) * AL(prato[i].n).u); rerender(); };
 ACT.pratoG = (i, el) => { prato[i].g = +el.value || 0; rerender(); };
 ACT.pratoDel = i => { prato.splice(i, 1); rerender(); };
 ACT.pratoLimpar = () => { prato = []; rerender(); };
@@ -287,13 +326,13 @@ ACT.alimEdit = (n, el, ev) => {
   const f = (k, l) => `<div><label class="f">${l}</label><input type="number" step="any" id="a_${k}" value="${a[k]}"></div>`;
   abrir(`<button class="x" data-act="fechar">×</button><h2>${n ? 'Editar' : 'Novo'} ingrediente</h2><div class="sub">Valores por 100 g.</div>
    <label class="f">Nome</label><input id="a_n" value="${esc(a.n)}"><label class="f">Categoria</label><select id="a_c">${CATS.map(c => `<option ${c === a.c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-   <div class="g2">${f('kcal', 'Calorias')}${f('proteina_g', 'Proteína (g)')}${f('carbo_g', 'Carboidrato (g)')}${f('gordura_g', 'Gordura (g)')}${f('fibra_g', 'Fibra (g)')}</div>
+   <div class="g2">${f('kcal', 'Calorias')}${f('proteina_g', 'Proteína (g)')}${f('carbo_g', 'Carboidrato (g)')}${f('gordura_g', 'Gordura (g)')}${f('fibra_g', 'Fibra (g)')}<div><label class="f">Peso de 1 unidade (g)</label><input type="number" step="any" id="a_u" value="${a.u || ''}" placeholder="não se conta"></div></div>
    <button class="btn g" data-act="alimOk" data-arg="${esc(n)}">Salvar</button>${n ? `<button class="btn sec" data-act="alimDel" data-arg="${esc(n)}">Apagar</button>` : ''}`, 'v');
 };
 ACT.alimOk = ant => {
   const nn = $('#a_n').value.trim(); if (!nn) return toast('Digite o nome'); if (nn !== ant && AL(nn)) return toast('Já existe um ingrediente com esse nome');
-  const o = { n: nn, c: $('#a_c').value }; for (const k of ['kcal', 'proteina_g', 'carbo_g', 'gordura_g', 'fibra_g']) o[k] = +$('#a_' + k).value || 0;
-  if (ant) { Object.assign(AL(ant), o); if (nn !== ant) S.receitas.forEach(r => r.ingredientes.forEach(i => { if (i.alimento === ant) i.alimento = nn; })); } else S.alimentos.push(o);
+  const o = { n: nn, c: $('#a_c').value }; for (const k of ['kcal', 'proteina_g', 'carbo_g', 'gordura_g', 'fibra_g']) o[k] = +$('#a_' + k).value || 0; o.u = +$('#a_u').value || 0; if (!o.u) delete o.u;
+  if (ant) { const A0 = AL(ant); delete A0.u; Object.assign(A0, o); if (nn !== ant) S.receitas.forEach(r => r.ingredientes.forEach(i => { if (i.alimento === ant) i.alimento = nn; })); } else S.alimentos.push(o);
   salvar(); toast('Ingrediente salvo'); fechar(); rerender();
 };
 ACT.alimDel = n => { if (S.receitas.some(r => r.ingredientes.some(i => i.alimento === n))) return toast('Está em uma receita; edite a receita antes'); if (!confirm('Apagar ' + n + '?')) return; S.alimentos = S.alimentos.filter(a => a.n !== n); salvar(); fechar(); rerender(); };
@@ -336,6 +375,7 @@ function horariosAuto(i) {
   }
   const R = {}; for (const r in H) R[r] = { h: hm(H[r][0]), por: H[r][1] }; return R;
 }
+ACT.comido = id => { consumoHoje(); const C = (S.consumo.comidos ||= []), i = C.indexOf(id); i < 0 ? C.push(id) : C.splice(i, 1); salvar(); if (navigator.vibrate) navigator.vibrate(15); rerender(); };
 ACT.gerarDia = () => { S.consumo.plano = true; salvar(); location.hash = '#/dieta'; setTimeout(() => $('#plano')?.scrollIntoView({ behavior: 'smooth' }), 350); };
 ACT.catP = a => { catP = a; rerender(); };
 ACT.comer = (id, el, ev) => { if (ev.target.closest('.ed')) return; consumoHoje(); const L = S.consumo.ids, i = L.indexOf(id); i < 0 ? L.push(id) : L.splice(i, 1); salvar(); rerender(); };
@@ -356,7 +396,7 @@ ACT.recVer = id => {
   const r = S.receitas.find(x => x.id === id), t = totais(r.ingredientes);
   abrir(`<button class="x" data-act="fechar">×</button><h2>${esc(r.nome)}</h2><div class="sub">${r.refeicao} · porção para 1 pessoa${r.tempo_min ? ' · ' + r.tempo_min + ' min' : ''}</div>
    <div class="cx"><b>${nf(t.kcal)} kcal</b> · P ${nf(t.proteina_g)} g · C ${nf(t.carbo_g)} g · G ${nf(t.gordura_g)} g · F ${nf(t.fibra_g)} g</div>
-   <div class="cx"><b>Ingredientes</b>${r.ingredientes.map(i => `<div class="ref"><span>${esc(i.alimento)}</span><span>${nf(i.g)} g</span></div>`).join('')}</div>
+   <div class="cx"><b>Ingredientes</b>${r.ingredientes.map(i => `<div class="ref"><span>${esc(i.alimento)}</span><span>${nf(i.g)} g${unTxt(i.alimento, i.g)}</span></div>`).join('')}</div>
    ${r.passos?.length ? `<div class="cx"><b>Modo de preparo</b><ol style="padding-left:20px;margin:6px 0">${r.passos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>${(r.modos || []).map(m => `<div class="sub"><b>${esc(m.modo)}:</b> ${esc(m.como)}</div>`).join('')}</div>` : ''}
    ${r.dica ? `<div class="aviso">💡 ${esc(r.dica)}</div>` : ''}
    <div class="cx"><b>🎬 Link do vídeo</b><input id="lk" value="${esc(r.link_youtube || '')}" placeholder="YouTube, Reels, TikTok…" style="margin-top:6px"><div class="g2"><button class="btn p sec" data-act="linkSalvar" data-arg="${id}">Salvar link</button>${r.link_youtube ? `<a class="btn p o" href="${esc(r.link_youtube)}" target="_blank" rel="noopener">Abrir vídeo</a>` : ''}</div></div>
@@ -372,15 +412,16 @@ function recForm(r) {
   const opts = S.alimentos.map(a => a.n).sort((a, b) => a.localeCompare(b));
   abrir(`<button class="x" data-act="fechar">×</button><h2>${r.id ? 'Editar' : 'Nova'} receita</h2>
    <label class="f">Nome</label><input id="r_nome" value="${esc(r.nome)}"><div class="g2"><div><label class="f">Categoria</label><select id="r_cat">${REF.map(x => `<option ${x === r.refeicao ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div><label class="f">Tempo (min)</label><input type="number" id="r_tempo" value="${r.tempo_min || ''}"></div></div>
-   <label class="f">Ingredientes (gramas para 1 pessoa)</label><div id="r_ings">${edIng.map((i, k) => `<div style="display:flex;gap:4px;margin:3px 0"><select data-chg="ingN" data-arg="${k}" style="flex:1">${opts.map(o => `<option ${o === i.alimento ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select><input type="number" value="${i.g}" data-chg="ingG" data-arg="${k}" style="width:70px"><button class="ed" data-act="ingDel" data-arg="${k}">✕</button></div>`).join('')}</div>
+   <label class="f">Ingredientes (gramas para 1 pessoa)</label><div id="r_ings">${edIng.map((i, k) => `<div style="display:flex;gap:4px;margin:3px 0"><select data-chg="ingN" data-arg="${k}" style="flex:1">${opts.map(o => `<option ${o === i.alimento ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>${AL(i.alimento)?.u ? `<input type="number" inputmode="decimal" step="0.5" min="0" value="${unQ(i.alimento, i.g)}" data-chg="ingU" data-arg="${k}" style="width:60px" title="unidades"><span style="align-self:center;font-size:12px">un</span>` : ''}<input type="number" value="${i.g}" data-chg="ingG" data-arg="${k}" style="width:64px"><span style="align-self:center;font-size:12px">g</span><button class="ed" data-act="ingDel" data-arg="${k}">✕</button></div>`).join('')}</div>
    <button class="btn p sec" data-act="ingAdd">+ Ingrediente</button>
    <label class="f">Modo de preparo (um passo por linha)</label><textarea id="r_passos">${esc((r.passos || []).join('\n'))}</textarea>
    <label class="f">Link do vídeo</label><input id="r_link" value="${esc(r.link_youtube || '')}">
    <button class="btn o" data-act="recOk" data-arg="${r.id}">Salvar</button>${r.id ? `<button class="btn sec" data-act="recDel" data-arg="${r.id}">Apagar receita</button>` : ''}`, 'r');
   recForm.r = r;
 }
-ACT.ingN = (k, el) => { edIng[k].alimento = el.value; };
-ACT.ingG = (k, el) => { edIng[k].g = +el.value || 0; };
+ACT.ingN = (k, el) => { snap(); edIng[k].alimento = el.value; setTimeout(() => recForm(recForm.r)); };
+ACT.ingU = (k, el) => { snap(); edIng[k].g = Math.round((+el.value || 0) * AL(edIng[k].alimento).u); setTimeout(() => recForm(recForm.r)); };
+ACT.ingG = (k, el) => { snap(); edIng[k].g = +el.value || 0; setTimeout(() => recForm(recForm.r)); };
 ACT.ingDel = k => { snap(); edIng.splice(k, 1); recForm(recForm.r); };
 ACT.ingAdd = () => { snap(); edIng.push({ alimento: S.alimentos[0].n, g: 100 }); recForm(recForm.r); };
 function snap() { const r = recForm.r; recForm.r = { ...r, nome: $('#r_nome').value, refeicao: $('#r_cat').value, tempo_min: $('#r_tempo').value, passos: $('#r_passos').value.split('\n'), link_youtube: $('#r_link').value }; }
